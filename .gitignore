@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.log
+
+# Virtual environment
+.venv/
+env/
+venv/
+
+# Streamlit
+.streamlit/config.toml
+.streamlit/secrets.toml
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Google credentials
+credentials.json
+token.json
+
+# Misc
+*.sqlite3
+*.db
+*.bak
+*.tmp
+*.swp
