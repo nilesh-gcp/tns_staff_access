@@ -11,7 +11,6 @@ available_pages = {
     "📊 Analytics & Reports": "3_Membership",
 }
 
-
 def main():
 
     approved_emails = get_approved_emails()
@@ -50,4 +49,11 @@ def main():
             st.rerun()
 
 if __name__ == "__main__":
+    # --- Streamlit app configuration & auth ---
+    st.set_page_config(
+        page_title="TnS Staff Access",
+        page_icon="🍽️",
+        layout="centered",  # Centered layout better on mobile
+        initial_sidebar_state="collapsed"
+    )
     main()
