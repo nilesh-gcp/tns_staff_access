@@ -2,17 +2,36 @@ import streamlit as st
 import pandas as pd
 import uuid
 import numpy as np
-from datetime import datetime, timedelta, timezone
-from config.sheet_adapter import get_worksheet
+from datetime import datetime, timedelta, timezone, date as dt_date
+from config.sheet_adapter import get_worksheet, sanitize_for_json
 from config.logger import log_event
+from auth.session_guard import require_auth
+from ui.form_manager import init_reset_flag, reset_form_fields
 
-# Ensure user_info is initialized
-if "user_info" not in st.session_state:
-    st.session_state.user_info = {"email": "unknown@user.com"}
-
+# 🔐 Enforce authentication
+require_auth()
 email = st.session_state.user_info.get("email")
 
-# Session state for edit tracking
+# 🧠 Initialize form reset flag
+init_reset_flag()
+if st.session_state.reset_form:
+    reset_form_fields()
+
+# Always ensure keys exist before rendering widgets
+st.session_state.setdefault("name_input", "")
+st.session_state.setdefault("company_input", "")
+st.session_state.setdefault("contact_input", "")
+st.session_state.setdefault("ts_lead_input", "")
+st.session_state.setdefault("advance_input", "")
+st.session_state.setdefault("notes_input", "")
+st.session_state.setdefault("res_type_input", "Meeting")
+st.session_state.setdefault("slot_input", "Morning")
+st.session_state.setdefault("status_input", "In-Progress")
+st.session_state.setdefault("date_input", datetime.today())
+st.session_state.setdefault("pax_input", 1)
+
+
+# 📝 Session state for edit tracking
 if "edit_id" not in st.session_state:
     st.session_state.edit_id = None
 
@@ -20,31 +39,31 @@ st.title("✏️ Manage Reservations")
 
 mode = st.radio("Choose Action", ["Add New", "Edit Existing"], horizontal=True)
 
-# Show filters only in Edit mode
+# 🎯 Show filters only in Edit mode
 if mode == "Edit Existing":
     filter_option = st.radio("📆 Filter by Date", ["Today", "Current Week", "Next Week", "This Month", "Next Month", "Select Date"], horizontal=True)
-    selected_date = None
-    if filter_option == "Select Date":
-        selected_date = st.date_input("Choose a Date")
+    selected_date = st.date_input("Choose a Date") if filter_option == "Select Date" else None
     mobile_filter = st.text_input("📞 Filter by Contact Number")
 else:
     filter_option = None
     selected_date = None
     mobile_filter = None
 
-# Load and sanitize data
+# 📊 Load and sanitize data
 sheet = get_worksheet("reservation_sheets", "RESERVATION_SHEET", "RESERVATION_WORKSHEET")
 data = sheet.get_all_values()
 df = pd.DataFrame(data[1:], columns=data[0])
 df.columns = [col.strip().lower().replace(" ", "_") for col in df.columns]
 df["reservation_date"] = pd.to_datetime(df["reservation_date"], errors="coerce")
 
-# Time anchors
+# 📅 Time anchors
 today = datetime.now().date()
 start_of_week = today - timedelta(days=today.weekday())
 start_of_next_week = start_of_week + timedelta(days=7)
 start_of_month = today.replace(day=1)
 start_of_next_month = (start_of_month + timedelta(days=32)).replace(day=1)
+
+
 
 def filter_by_date(option):
     if option == "Today":
@@ -56,7 +75,7 @@ def filter_by_date(option):
         end_of_next_week = start_of_next_week + timedelta(days=6)
         return df[(df["reservation_date"].dt.date >= start_of_next_week) & (df["reservation_date"].dt.date <= end_of_next_week)]
     elif option == "This Month":
-        end_of_month = (start_of_next_month - timedelta(days=1))
+        end_of_month = start_of_next_month - timedelta(days=1)
         return df[(df["reservation_date"].dt.date >= start_of_month) & (df["reservation_date"].dt.date <= end_of_month)]
     elif option == "Next Month":
         end_of_next_month = (start_of_next_month + timedelta(days=32)).replace(day=1) - timedelta(days=1)
@@ -66,56 +85,48 @@ def filter_by_date(option):
     return df
 
 filtered_df = filter_by_date(filter_option) if mode == "Edit Existing" else df
-
 if mobile_filter:
     filtered_df = filtered_df[filtered_df["contact_number"].str.contains(mobile_filter, na=False)]
 
-def sanitize_for_json(row):
-    clean = []
-    for val in row:
-        if isinstance(val, (np.integer, pd.Int64Dtype)):
-            clean.append(int(val))
-        elif isinstance(val, (np.floating, pd.Float64Dtype)):
-            clean.append(float(val))
-        elif isinstance(val, (pd.Timestamp, datetime)):
-            clean.append(str(val))
-        else:
-            clean.append(val)
-    return clean
-
-# ADD NEW MODE
+# ➕ ADD NEW MODE
 if mode == "Add New":
     st.subheader("➕ Add New Reservation")
-    with st.form("add_form"):
-        name = st.text_input("Name")
-        company = st.text_input("Company")
-        contact = st.text_input("Contact Number")
-        ts_lead = st.text_input("T&S LEAD")
-        pax = st.number_input("PAX", min_value=1, step=1)
-        advance = st.text_input("Advance Payment")
-        res_type = st.selectbox("Reservation Type", ["Meeting", "Event", "Workshop", "Famili Getogether", "Office Group"])
-        date = st.date_input("Reservation Date")
-        slot = st.selectbox("Time Slot", ["Morning", "Afternoon", "Evening"])
-        notes = st.text_area("Notes")
-        status = st.selectbox("Status", ["In-Progress", "Confirmed", "Cancelled", "Completed", "Lost"])
+
+    with st.form("add_form", clear_on_submit=False):
+        name = st.text_input("Name", key="name_input")
+        company = st.text_input("Company", key="company_input")
+        contact = st.text_input("Contact Number", key="contact_input")
+        ts_lead = st.text_input("T&S LEAD", key="ts_lead_input")
+        pax = st.number_input("PAX", min_value=1, step=1, key="pax_input")
+        advance = st.text_input("Advance Payment", key="advance_input")
+        res_type = st.selectbox("Reservation Type", ["Meeting", "Event", "Workshop", "Famili Getogether", "Office Group"], key="res_type_input")
+        date = st.date_input("Reservation Date", key="date_input")
+        slot = st.selectbox("Time Slot", ["Morning", "Afternoon", "Evening"], key="slot_input")
+        notes = st.text_area("Notes", key="notes_input")
+        status = st.selectbox("Status", ["In-Progress", "Confirmed", "Cancelled", "Completed", "Lost"], key="status_input")
+
+        submitted = st.form_submit_button("Submit Reservation")
+
+
+
+    if submitted:
         submitted_at = datetime.now(timezone.utc).isoformat()
         audit_id = str(uuid.uuid4())
 
-        submitted = st.form_submit_button("Submit Reservation")
-        if submitted:
-            row = [
-                name, company, contact, ts_lead, pax, advance, res_type,
-                str(date), slot, notes, email, submitted_at, audit_id, status
-            ]
-            sheet.append_row(sanitize_for_json(row), value_input_option="USER_ENTERED")
-            log_event("logging_sheets", "LOGGER_SHEET", "LOGGER_WORKSHEET_RESERVATION", "Reservation", email, f"{res_type} for {date} | Audit ID: {audit_id}")
-            st.success("Reservation added.")
-            st.rerun()
+        row = [
+            name, company, contact, ts_lead, pax, advance, res_type,
+            str(date), slot, notes, email, submitted_at, audit_id, status
+        ]
+        sheet.append_row(sanitize_for_json(row), value_input_option="USER_ENTERED")
+        log_event("logging_sheets", "LOGGER_SHEET", "LOGGER_WORKSHEET_RESERVATION", "Reservation", email, f"{res_type} for {date} | Audit ID: {audit_id}")
+        st.success("✅ Reservation added successfully!")
 
-# EDIT MODE
+        st.session_state.reset_form = True
+        st.rerun()
+
+# ✏️ EDIT MODE
 elif mode == "Edit Existing":
     st.subheader("✏️ Edit Existing Reservation")
-
     edit_id = st.session_state.edit_id
 
     if edit_id:
