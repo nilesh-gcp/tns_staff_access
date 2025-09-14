@@ -1,6 +1,9 @@
 import gspread
 from google.oauth2.service_account import Credentials
 import streamlit as st
+import pandas as pd
+import numpy as np
+from datetime import datetime
 
 # Define required scopes for Sheets + Drive
 SCOPES = [
@@ -33,3 +36,16 @@ def get_approved_emails():
     """
     sheet = get_worksheet("access_control_sheets", "ACCESS_CONTROL_SHEET", "ACCESS_CONTROL_WORKSHEET")
     return [email.strip().lower() for email in sheet.col_values(1)[1:] if email]
+
+def sanitize_for_json(row):
+    clean = []
+    for val in row:
+        if isinstance(val, (np.integer, pd.Int64Dtype)):
+            clean.append(int(val))
+        elif isinstance(val, (np.floating, pd.Float64Dtype)):
+            clean.append(float(val))
+        elif isinstance(val, (pd.Timestamp, datetime)):
+            clean.append(str(val))
+        else:
+            clean.append(val)
+    return clean

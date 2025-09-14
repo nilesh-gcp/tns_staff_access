@@ -5,10 +5,12 @@ from datetime import datetime, timedelta, timezone
 from config.sheet_adapter import get_worksheet
 from config.logger import log_event
 import plotly.express as px
+from auth.session_guard import require_auth
 
 # Load reservation sheet
 sheet = get_worksheet("reservation_sheets", "RESERVATION_SHEET", "RESERVATION_WORKSHEET")
-email = st.session_state.user_info.get("email")
+# Enforce authentication
+require_auth()
 
 st.title("📅 Reservation Dashboard")
 
@@ -22,7 +24,8 @@ if "reservation_date" not in df.columns:
     st.error("❌ 'Reservation Date' column not found. Please check your sheet headers.")
     st.stop()
 
-df["reservation_date"] = pd.to_datetime(df["reservation_date"], errors="coerce")
+df["reservation_date"] = pd.to_datetime(df["reservation_date"], format="%Y-%m-%d", errors="coerce")
+
 
 # Time anchors
 today = datetime.now().date()
@@ -36,19 +39,20 @@ filter_option = st.radio("📆 Period", ["Today", "Current Week", "Next Week", "
 
 def filter_reservations(option):
     if option == "Today":
-        return df[df["reservation_date"].dt.date == today]
+        return df[df["reservation_date"] == pd.Timestamp(today)]
     elif option == "Current Week":
         end_of_week = start_of_week + timedelta(days=6)
-        return df[(df["reservation_date"].dt.date >= start_of_week) & (df["reservation_date"].dt.date <= end_of_week)]
+        print(end_of_week, start_of_week)
+        return df[(df["reservation_date"] >= pd.Timestamp(start_of_week)) & (df["reservation_date"] <= pd.Timestamp(end_of_week))]
     elif option == "Next Week":
         end_of_next_week = start_of_next_week + timedelta(days=6)
-        return df[(df["reservation_date"].dt.date >= start_of_next_week) & (df["reservation_date"].dt.date <= end_of_next_week)]
+        return df[(df["reservation_date"] >= pd.Timestamp(start_of_next_week)) & (df["reservation_date"] <= pd.Timestamp(end_of_next_week))]
     elif option == "This Month":
-        end_of_month = (start_of_next_month - timedelta(days=1))
-        return df[(df["reservation_date"].dt.date >= start_of_month) & (df["reservation_date"].dt.date <= end_of_month)]
+        end_of_month = start_of_next_month - timedelta(days=1)
+        return df[(df["reservation_date"] >= pd.Timestamp(start_of_month)) & (df["reservation_date"] <= pd.Timestamp(end_of_month))]
     elif option == "Next Month":
         end_of_next_month = (start_of_next_month + timedelta(days=32)).replace(day=1) - timedelta(days=1)
-        return df[(df["reservation_date"].dt.date >= start_of_next_month) & (df["reservation_date"].dt.date <= end_of_next_month)]
+        return df[(df["reservation_date"] >= pd.Timestamp(start_of_next_month)) & (df["reservation_date"] <= pd.Timestamp(end_of_next_month))]
 
 filtered_df = filter_reservations(filter_option)
 
@@ -123,32 +127,3 @@ else:
 
     st.markdown("### 🥧 PAX Distribution by Status")
     st.plotly_chart(fig, use_container_width=True)
-
-# # Reservation form
-# st.markdown("### ➕ Submit a New Reservation")
-
-# with st.form("reservation_form"):
-#     name = st.text_input("Name")
-#     company = st.text_input("Company")
-#     contact = st.text_input("Contact Number")
-#     ts_lead = st.text_input("T&S LEAD")
-#     pax = st.number_input("PAX", min_value=1, step=1)
-#     advance = st.text_input("Advance Payment")
-#     res_type = st.selectbox("Reservation Type", ["Meeting", "Event", "Workshop", "Famili Getogether", "Office Group"])
-#     date = st.date_input("Reservation Date")
-#     slot = st.selectbox("Time Slot", ["Morning", "Afternoon", "Evening"])
-#     notes = st.text_area("Notes")
-#     status = st.selectbox("Status", ["In-Progress", "Confirmed", "Cancelled", "Completed", "Lost"])
-#     submitted_at = datetime.now(timezone.utc).isoformat()
-#     audit_id = str(uuid.uuid4())
-
-#     submitted = st.form_submit_button("Submit Reservation")
-#     if submitted:
-#         row = [
-#             name, company, contact, ts_lead, pax, advance, res_type,
-#             str(date), slot, notes, email, submitted_at, audit_id, status
-#         ]
-#         sheet.append_row(row, value_input_option="USER_ENTERED")
-#         log_event("logging_sheets", "LOGGER_SHEET", "LOGGER_WORKSHEET_RESERVATION", "Reservation", email, f"{res_type} for {date} | Audit ID: {audit_id}")
-#         st.success("Reservation submitted.")
-#         st.rerun()
