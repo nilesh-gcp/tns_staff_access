@@ -6,9 +6,9 @@ from config.config import get
 from auth.session_guard import set_auth_session, require_auth
 
 available_pages = {
-    "📅 Reservation Dashboard": "1_Reservation",
-    "🛠 Manage Reservations": "2_Manage_Reservations",
-    "📊 Analytics & Reports": "3_Membership",
+    "📅 Reservation Dashboard": "Reservation",
+    "🛠 Manage Reservations": "Manage_Reservations",
+    "📊 Analytics & Reports": "Membership",
 }
 
 def main():
@@ -25,11 +25,20 @@ def main():
                 email = user_info.get("email", "").lower()
                 if email in approved_emails:
                     set_auth_session(user_info)
+                    st.session_state["is_authenticated"] = True
+                    st.session_state["user_email"] = email
                     st.success(f"Welcome, {email}!")
                     log_event("logging_sheets", "LOGGER_SHEET", "LOGGER_WORKSHEET_MEMBERSHIP", "Login", email, "Access granted")
-                    st.markdown("### 🧭 Navigation")
-                    for label, page in available_pages.items():
-                        st.markdown(f"- [{label}](./{page})")
+                    st.markdown("""
+                    ### 🧭 You're logged in!
+                    Use the sidebar to access:
+                    - 📅 Reservation Dashboard
+                    - 🛠 Manage Reservations
+                    - 📊 Analytics & Reports
+
+                    If you don't see the sidebar, click the **≡** icon in the top-left corner.
+                    """)
+
                 else:
                     st.error("Access denied. Your email is not authorized.")
                     log_event("logging_sheets", "LOGGER_SHEET", "LOGGER_WORKSHEET_MEMBERSHIP", "Login", email, "Access denied")
@@ -41,12 +50,28 @@ def main():
             st.markdown(f"[🔐 Login with Google]({get_auth_url()})")
             st.stop()
     else:
+        print (st.session_state.get("is_authenticated"))
         email = st.session_state.user_info.get("email")
         st.success(f"Welcome back, {email}!")
+        # st.markdown("### 🧭 Navigation")
+        # for label, page in available_pages.items():
+        #     st.markdown(f'<a href="/{page}" target="_self">{label}</a>', unsafe_allow_html=True)
+        if st.session_state.get("is_authenticated"):
+            st.markdown("""
+            ### 🧭 You're logged in!
+            Use the sidebar to access:
+            - 📅 Reservation Dashboard
+            - 🛠 Manage Reservations
+            - 📊 Analytics & Reports
+
+            If you don't see the sidebar, click the **≡** icon in the top-left corner.
+            """)
+
         if st.button("Logout"):
             del st.session_state["user_info"]
             log_event("logging_sheets", "LOGGER_SHEET", "LOGGER_WORKSHEET_MEMBERSHIP", "Logout", email, "User logged out")
             st.rerun()
+        
 
 if __name__ == "__main__":
     # --- Streamlit app configuration & auth ---
